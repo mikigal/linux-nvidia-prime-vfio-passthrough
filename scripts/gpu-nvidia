@@ -52,8 +52,9 @@ safe_modprobe nvidia || fail "Could not load nvidia"
 safe_modprobe nvidia_modeset || fail "Could not load nvidia_modeset"
 safe_modprobe nvidia_drm || fail "Could not load nvidia_drm"
 safe_modprobe nvidia_uvm || fail "Could not load nvidia_uvm"
+systemctl start nvidia-persistenced
+nvidia-smi -pm 1
 
-gpu-check
 info "Loaded NVIDIA driver successfuly"
 sudo -u "#$UID_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_USER/bus" notify-send -i emblem-success -t 3000 "GPU Driver" "Switched GPU driver to NVIDIA"
 exit 0
