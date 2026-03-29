@@ -43,6 +43,7 @@ nvidia-smi -pm 0
 
 if fuser /dev/nvidia* >/dev/null 2>&1; then
     sudo -u "#$UID_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_USER/bus" notify-send -i dialog-error -t 3000 "GPU Driver" "NVIDIA GPU is in use, cannot switch driver"
+    sudo gpu-nvidia-processes
     fail "NVIDIA GPU is in use, can not switch driver, check failed on /dev/nvidia*"
 fi
 
@@ -51,7 +52,8 @@ NVIDIA_RENDER="/dev/dri/by-path/pci-0000:$GPU-render"
 
 if fuser "$NVIDIA_CARD" "$NVIDIA_RENDER" >/dev/null 2>&1; then
     sudo -u "#$UID_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_USER/bus" notify-send -i dialog-error -t 3000 "GPU Driver" "NVIDIA GPU is in use, cannot switch driver"
-    fail "NVIDIA GPU is in use, can not switch driver, check faield on /dev/dri"
+    sudo gpu-nvidia-processes
+    fail "NVIDIA GPU is in use, can not switch driver, check failed on /dev/dri"
 fi
 
 safe_modprobe -r nvidia_uvm || fail "Could not unload nvidia_uvm"

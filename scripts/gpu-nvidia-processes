@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# GPU PCIe address
+GPU="01:00.0"
+
+NVIDIA_CARD="/dev/dri/by-path/pci-0000:$GPU-card"
+NVIDIA_RENDER="/dev/dri/by-path/pci-0000:$GPU-render"
+
+nvidia_output=$(fuser /dev/nvidia* 2>/dev/null)
+dri_output=$( fuser "$NVIDIA_CARD" "$NVIDIA_RENDER" 2>/dev/null)
+
+pids=$(echo "$nvidia_output $dri_output" | grep -oE '[0-9]+')
+unique_pids=$(echo "$pids" | sort -u)
+
+if [ -z "$unique_pids" ]; then
+    echo "NVIDIA GPU is not in use"
+    exit 0
+fi
+
+echo "NVIDIA GPU is used by:"
+echo "----------------------------------------"
+printf "%-8s %-10s %s\n" "PID" "USER" "COMMAND"
+
+persistenced_found=false
+results=""
+
+for pid in $unique_pids; do
+    if ps -p "$pid" > /dev/null 2>&1; then
+        line=$(ps -ww -p "$pid" -o pid=,user=,comm=)
+
+        if echo "$line" | grep -q "nvidia-persiste"; then
+            persistenced_found=true
+            continue
+        fi
+
+        results+="$line"$'\n'
+    fi
+done
+
+echo "$results" | while read -r p u rest; do
+    [ -z "$p" ] && continue
+    printf "%-8s %-10s %s\n" "$p" "$u" "$rest"
+done | sort -n
+
+if [ "$persistenced_found" = true ]; then
+    echo
+    echo "nvidia-persistenced is working"
+fi
