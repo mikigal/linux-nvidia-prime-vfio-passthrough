@@ -3,11 +3,6 @@
 # GPU PCIe address
 GPU="01:00.0"
 
-if [[ "$EUID" -ne 0 ]]; then
-    echo "root permissions are required"
-    exit 1
-fi
-
 driver=$(lspci -nnk -s "$GPU" | awk -F': ' '/Kernel driver in use/ {print $2}')
 
 if [[ -z "$driver" ]]; then
@@ -15,7 +10,7 @@ if [[ -z "$driver" ]]; then
     lspci -nnk -s "$GPU"
 elif [[ "$driver" == "nvidia" ]]; then
     echo "Driver in use: nvidia"
-    sudo gpu-nvidia-processes
+    gpu-nvidia-processes
 elif [[ "$driver" == "vfio-pci" ]]; then
     echo "Driver in use: vfio-pci"
 else

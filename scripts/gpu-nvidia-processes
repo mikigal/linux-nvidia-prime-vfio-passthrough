@@ -3,16 +3,19 @@
 # GPU PCIe address
 GPU="01:00.0"
 
-if [[ "$EUID" -ne 0 ]]; then
-    echo "root permissions are required"
-    exit 1
-fi
-
 NVIDIA_CARD="/dev/dri/by-path/pci-0000:$GPU-card"
 NVIDIA_RENDER="/dev/dri/by-path/pci-0000:$GPU-render"
 
-nvidia_output=$(sudo fuser /dev/nvidia* 2>/dev/null)
-dri_output=$(sudo fuser "$NVIDIA_CARD" "$NVIDIA_RENDER" 2>/dev/null)
+if [ "$EUID" -eq 0 ]; then
+    FUSER_CMD="sudo fuser"
+    CHECK_PERSISTENCED=true
+else
+    FUSER_CMD="fuser" 
+    CHECK_PERSISTENCED=false
+fi
+
+nvidia_output=$($FUSER_CMD /dev/nvidia* 2>/dev/null)
+dri_output=$($FUSER_CMD "$NVIDIA_CARD" "$NVIDIA_RENDER" 2>/dev/null)
 
 pids=$(echo "$nvidia_output $dri_output" | grep -oE '[0-9]+')
 unique_pids=$(echo "$pids" | sort -u)
@@ -24,9 +27,11 @@ for pid in $unique_pids; do
     if ps -p "$pid" > /dev/null 2>&1; then
         line=$(ps -ww -p "$pid" -o pid=,user=,comm=)
 
-        if echo "$line" | grep -q "nvidia-persiste"; then
-            persistenced_found=true
-            continue
+        if [ "$CHECK_PERSISTENCED" = true ]; then
+            if echo "$line" | grep -q "nvidia-persiste"; then
+                persistenced_found=true
+                continue
+            fi
         fi
 
         results+="$line"$'\n'
@@ -35,9 +40,15 @@ done
 
 if [ -z "$results" ]; then
     echo "NVIDIA GPU is not used by any process"
-    if [ "$persistenced_found" = true ]; then
-        echo "nvidia-persistenced is working"
+
+    if [ "$CHECK_PERSISTENCED" = true ]; then
+        if [ "$persistenced_found" = true ]; then
+            echo "nvidia-persistenced is working"
+        fi
+    else
+        echo "Cannot verify nvidia-persistenced (insufficient permissions)"
     fi
+
     exit 0
 fi
 
@@ -50,7 +61,12 @@ echo "$results" | while read -r p u rest; do
     printf "%-8s %-10s %s\n" "$p" "$u" "$rest"
 done | sort -n
 
-if [ "$persistenced_found" = true ]; then
+if [ "$CHECK_PERSISTENCED" = true ]; then
+    if [ "$persistenced_found" = true ]; then
+        echo
+        echo "nvidia-persistenced is working"
+    fi
+else
     echo
-    echo "nvidia-persistenced is working"
+    echo "Cannot verify if nvidia-persistenced is working (root permissions are required)"
 fi
