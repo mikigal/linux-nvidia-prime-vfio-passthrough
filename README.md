@@ -2,6 +2,11 @@
 
 A comprehensive guide to setting up NVIDIA PRIME offloading alongside GPU passthrough (VFIO, without rebooting) and Looking Glass on Linux systems.
 
+> [!NOTE]
+> Also check out our newest project - a self-hosted, E2EE discord/telegram alternative called Zuna
+> 
+> https://github.com/zuna-app/zuna
+
 ## Setup Assumptions
 - By default, the system and applications run on the AMD dGPU or an integrated GPU to ensure maximum compatibility and stability
 - The user can run any application on the NVIDIA GPU using PRIME offloading without reconnecting monitors
