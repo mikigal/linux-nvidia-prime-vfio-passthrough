@@ -47,7 +47,8 @@ driver=$(lspci -nnk -s "$GPU" | awk -F': ' '/Kernel driver in use/ {print $2}')
 
 [[ -z "${driver:-}" ]] && fail "Could not find driver in use for $GPU"
 
-if [[ "$driver" == "nvidia" ]]; then
+# --force reloads every module, to rebuild a GPU left half unloaded by gpu-vfio
+if [[ "$driver" == "nvidia" && "${1:-}" != "--force" ]]; then
     # Recovers the monitors and daemons if a failed gpu-vfio run left them off
     restore_host_services
     info "NVIDIA is already loaded"

@@ -29,7 +29,7 @@ rollback() {
     fi
     gpu-nvidia-processes || true # Show the terminal what was using the GPU
     wait_for_modules_released || true
-    gpu-nvidia || true
+    gpu-nvidia --force || true
     # Notify last so it's on the bottom (gpu-nvidia will have a success)
     notify dialog-error "NVIDIA GPU is in use, Could not switch GPU driver to VFIO" || true
 }
