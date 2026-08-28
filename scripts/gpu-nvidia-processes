@@ -49,7 +49,6 @@ else
     exit_code=0
 fi
 
-
 if [[ "$can_check_persistenced" != true ]]; then
     echo "Cannot verify nvidia-persistenced (root permissions are required)"
 elif [[ "$persistenced_found" == true ]]; then

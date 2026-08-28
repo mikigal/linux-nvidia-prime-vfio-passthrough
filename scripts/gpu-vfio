@@ -14,9 +14,24 @@ info() {
 }
 
 notify() {
-    local icon="$1" message="$2"
+    local icon="$1" message="$2" urgency="normal"
+    # Only errors stay up until dismissed, so they survive the screens coming back
+    [[ "$icon" == dialog-error ]] && urgency="critical"
     sudo -u "#$UID_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_USER/bus" \
-        notify-send -i "$icon" -t 3000 "GPU Driver" "$message"
+        notify-send -i "$icon" -t 3000 -u "$urgency" "GPU Driver" "$message"
+}
+
+# Switch back to NVIDIA fully if somehow you can't switch to VFIO:
+rollback() {
+    local status=$?
+    if (( status == 0 )); then
+        return 0
+    fi
+    gpu-nvidia-processes || true # Show the terminal what was using the GPU
+    wait_for_modules_released || true
+    gpu-nvidia || true
+    # Notify last so it's on the bottom (gpu-nvidia will have a success)
+    notify dialog-error "NVIDIA GPU is in use, Could not switch GPU driver to VFIO" || true
 }
 
 safe_modprobe() {
@@ -27,18 +42,20 @@ safe_modprobe() {
     fi
 }
 
-# fuser goes blind once the detach removes /dev/dri/by-path, the refcount does not
 module_refcnt() {
     cat "/sys/module/$1/refcnt" 2>/dev/null || echo 0
 }
 wait_for_modules_released() {
     local attempt
+    local success=1
     for (( attempt = 0; attempt < 20; attempt++ )); do
         if [[ "$(module_refcnt nvidia_drm)" == 0 && "$(module_refcnt nvidia_uvm)" == 0 ]]; then
-            return
+            success=0
+            break
         fi
         sleep "0.2"
     done
+    return $success
 }
 
 if [[ "$EUID" -ne 0 ]]; then
@@ -55,20 +72,23 @@ if [[ "$driver" == "vfio-pci" ]]; then
     exit 0
 fi
 
+# From here on, reset the GPU to Nvidia if we fail.
+trap rollback EXIT
+
 systemctl stop nvidia-persistenced
 # Dynamic Boost daemon, laptop-only so it is not installed everywhere
 systemctl stop nvidia-powerd 2>/dev/null || true
 nvidia-smi -pm 0
 
 # Lets NVIDIA let go of the GPU when you have external monitors attached to it
-udevadm trigger --action=remove "/sys/bus/pci/devices/0000:$GPU"
+for dev in "/sys/bus/pci/devices/0000:$GPU"/drm/{card,renderD}[0-9]*; do
+    [[ -e "$dev" ]] || continue
+    udevadm trigger --action=remove "$dev"
+done
 
-if ! gpu-nvidia-processes; then
-    notify dialog-error "NVIDIA GPU is in use, cannot switch driver"
+if ! wait_for_modules_released; then
     fail "NVIDIA GPU is in use, can not switch driver"
 fi
-
-wait_for_modules_released
 
 safe_modprobe -r nvidia_uvm || fail "Could not unload nvidia_uvm"
 safe_modprobe -r nvidia_drm || fail "Could not unload nvidia_drm"
@@ -77,8 +97,8 @@ safe_modprobe -r nvidia || fail "Could not unload nvidia_modeset"
 safe_modprobe -r i2c_nvidia_gpu || fail "Could not unload i2c_nvidia_gpu"
 
 safe_modprobe vfio || fail "Could not load vfio"
-safe_modprobe vfio_pci || fail "Could not load vfio_iommu_type1"
-safe_modprobe vfio_iommu_type1 || fail "Could not load vfio_pci"
+safe_modprobe vfio_pci || fail "Could not load vfio_pci"
+safe_modprobe vfio_iommu_type1 || fail "Could not load vfio_iommu_type1"
 
 gpu-check
 info "Loaded vfio-pci driver successfuly"

@@ -14,9 +14,11 @@ info() {
 }
 
 notify() {
-    local icon="$1" message="$2"
+    local icon="$1" message="$2" urgency="normal"
+    # Only errors stay up until dismissed, so they survive the screens coming back
+    [[ "$icon" == dialog-error ]] && urgency="critical"
     sudo -u "#$UID_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_USER/bus" \
-        notify-send -i "$icon" -t 3000 "GPU Driver" "$message"
+        notify-send -i "$icon" -t 3000 -u "$urgency" "GPU Driver" "$message"
 }
 
 safe_modprobe() {
@@ -27,7 +29,10 @@ safe_modprobe() {
 }
 
 restore_host_services() {
-    udevadm trigger --action=add "/sys/bus/pci/devices/0000:$GPU"
+    for dev in "/sys/bus/pci/devices/0000:$GPU"/drm/{card,renderD}[0-9]*; do
+        [[ -e "$dev" ]] || continue
+        udevadm trigger --action=add "$dev"
+    done
     systemctl start nvidia-persistenced
     # Dynamic Boost daemon, laptop-only so it is not installed everywhere
     systemctl start nvidia-powerd 2>/dev/null || true
