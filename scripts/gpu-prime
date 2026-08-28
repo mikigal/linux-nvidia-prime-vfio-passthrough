@@ -3,18 +3,39 @@
 # GPU PCIe address
 GPU="01:00.0"
 
+fail() {
+    echo "$1" >&2
+    exit 1
+}
+
+notify() {
+    local message="$1"
+
+    # Without SUDO_USER we are already the desktop user, so notify-send works as-is
+    if [[ -z "${SUDO_USER:-}" ]]; then
+        notify-send -i dialog-error -t 3000 "GPU PRIME" "$message"
+        return
+    fi
+
+    local uid_user
+    uid_user=$(id -u "$SUDO_USER")
+    sudo -u "#$uid_user" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid_user/bus" \
+        notify-send -i dialog-error -t 3000 "GPU PRIME" "$message"
+}
+
 driver=$(lspci -nnk -s "$GPU" | awk -F': ' '/Kernel driver in use/ {print $2}')
 
 [[ -z "${driver:-}" ]] && fail "Could not find driver in use for $GPU"
 
 if [[ "$driver" != "nvidia" ]]; then
-    if [[ -n "${SUDO_USER:-}" ]]; then
-        UID_USER=$(id -u "$SUDO_USER")
-        sudo -u "#$UID_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_USER/bus" notify-send -i dialog-error -t 3000 "GPU PRIME" "NVIDIA GPU is in passthrough mode, cannot run application"
-    else
-        notify-send -i dialog-error -t 3000 "GPU PRIME" "NVIDIA GPU is in passthrough mode, cannot run application"
-    fi
-    exit 1
+    notify "NVIDIA GPU is in passthrough mode, cannot run application"
+    fail "NVIDIA GPU is in passthrough mode, cannot run application"
 fi
 
-__NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only __GLX_VENDOR_LIBRARY_NAME=nvidia LIBVA_DRIVER_NAME=nvidia __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json "$@"
+__NV_PRIME_RENDER_OFFLOAD=1 \
+    __VK_LAYER_NV_optimus=NVIDIA_only \
+    __GLX_VENDOR_LIBRARY_NAME=nvidia \
+    LIBVA_DRIVER_NAME=nvidia \
+    __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json \
+    VK_LOADER_DRIVERS_SELECT=*nvidia* \
+    "$@"

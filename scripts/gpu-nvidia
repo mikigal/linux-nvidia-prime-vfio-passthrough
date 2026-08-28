@@ -13,15 +13,29 @@ info() {
     echo "$1"
 }
 
+notify() {
+    local icon="$1" message="$2" urgency="normal"
+    # Only errors stay up until dismissed, so they survive the screens coming back
+    [[ "$icon" == dialog-error ]] && urgency="critical"
+    sudo -u "#$UID_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_USER/bus" \
+        notify-send -i "$icon" -t 3000 -u "$urgency" "GPU Driver" "$message"
+}
+
 safe_modprobe() {
     local output
     if ! output=$(modprobe "$@" 2>&1); then
-        if echo "$output" | grep -q "Module amdgpu is in use"; then
-            return 0
-        else
-            fail "$output"
-        fi
+        echo "$output" | grep -q "Module amdgpu is in use" || fail "$output"
     fi
+}
+
+restore_host_services() {
+    for dev in "/sys/bus/pci/devices/0000:$GPU"/drm/{card,renderD}[0-9]*; do
+        [[ -e "$dev" ]] || continue
+        udevadm trigger --action=add "$dev"
+    done
+    systemctl start nvidia-persistenced
+    # Dynamic Boost daemon, laptop-only so it is not installed everywhere
+    systemctl start nvidia-powerd 2>/dev/null || true
 }
 
 if [[ "$EUID" -ne 0 ]]; then
@@ -33,13 +47,16 @@ driver=$(lspci -nnk -s "$GPU" | awk -F': ' '/Kernel driver in use/ {print $2}')
 
 [[ -z "${driver:-}" ]] && fail "Could not find driver in use for $GPU"
 
-if [[ "$driver" == "nvidia" ]]; then
+# --force reloads every module, to rebuild a GPU left half unloaded by gpu-vfio
+if [[ "$driver" == "nvidia" && "${1:-}" != "--force" ]]; then
+    # Recovers the monitors and daemons if a failed gpu-vfio run left them off
+    restore_host_services
     info "NVIDIA is already loaded"
     exit 0
 fi
 
 if pgrep -af vfio-pci >/dev/null; then
-    sudo -u "#$UID_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_USER/bus" notify-send -i dialog-error -t 3000 "GPU Driver" "VM is running, cannot switch driver"
+    notify dialog-error "VM is running, cannot switch driver"
     fail "VM is running, can not switch driver"
 fi
 
@@ -52,9 +69,10 @@ safe_modprobe nvidia || fail "Could not load nvidia"
 safe_modprobe nvidia_modeset || fail "Could not load nvidia_modeset"
 safe_modprobe nvidia_drm || fail "Could not load nvidia_drm"
 safe_modprobe nvidia_uvm || fail "Could not load nvidia_uvm"
-systemctl start nvidia-persistenced
+
+restore_host_services
 nvidia-smi -pm 1
 
 info "Loaded NVIDIA driver successfuly"
-sudo -u "#$UID_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_USER/bus" notify-send -i emblem-success -t 3000 "GPU Driver" "Switched GPU driver to NVIDIA"
+notify emblem-success "Switched GPU driver to NVIDIA"
 exit 0

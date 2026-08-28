@@ -10,7 +10,8 @@ if [[ -z "$driver" ]]; then
     lspci -nnk -s "$GPU"
 elif [[ "$driver" == "nvidia" ]]; then
     echo "Driver in use: nvidia"
-    gpu-nvidia-processes
+    # Its exit code reports GPU usage, which is not an error to report on
+    gpu-nvidia-processes || true
 elif [[ "$driver" == "vfio-pci" ]]; then
     echo "Driver in use: vfio-pci"
 else
