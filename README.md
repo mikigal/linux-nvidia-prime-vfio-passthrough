@@ -25,3 +25,4 @@ Having an easy to use VM with full performance is really useful, especially cons
 ## Authors
 - [Mikołaj Gałązka](https://github.com/mikigal) - research, testing, scripts, guide
 - [Adam Grzegorzewski](https://github.com/SocketByte) - research, testing, guide improvements, dvmm tool
+- [Cameron Showalter](https://github.com/Cameronsplaze) - scripts improvements, fixes for Fedora
