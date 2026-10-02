@@ -93,6 +93,8 @@ fi
 safe_modprobe -r nvidia_uvm || fail "Could not unload nvidia_uvm"
 safe_modprobe -r nvidia_drm || fail "Could not unload nvidia_drm"
 safe_modprobe -r nvidia_modeset || fail "Could not unload nvidia_modeset"
+# Without sleep unloading nvidia module sometimes throws error
+sleep 2
 safe_modprobe -r nvidia || fail "Could not unload nvidia_modeset"
 safe_modprobe -r i2c_nvidia_gpu || fail "Could not unload i2c_nvidia_gpu"
 
